@@ -14058,23 +14058,35 @@ window.addEventListener('DOMContentLoaded', function(){
     evaluate();
   };
   function fmt(m){ return m>=1000 ? (m/1000).toFixed(1)+' كم' : Math.round(m)+' م'; }
+  function mapsUrl(p){ return 'https://www.google.com/maps/search/?api=1&query='+p.lat+','+p.lon; }
   function showBanner(list){
     if(!list||!list.length){ hideBanner(); return; }
     var nearest=list[0];
     for(var i=1;i<list.length;i++) if(list[i].dist_m<nearest.dist_m) nearest=list[i];
+    var url=mapsUrl(nearest);
+    var isNew=false;
     if(!st.banner){
       var b=document.createElement('div');
       b.id='qtrRailBanner';
       b.setAttribute('dir','rtl');
       b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#c40000;color:#fff;font-weight:bold;text-align:center;padding:14px 10px;font-size:18px;box-shadow:0 2px 12px rgba(0,0,0,.5)';
+      var t=document.createElement('div'); t.id='qtrRailText'; b.appendChild(t);
+      var a=document.createElement('a');
+      a.id='qtrRailMap'; a.target='_blank'; a.rel='noopener';
+      a.textContent='📍 افتح الموقع في Google Maps';
+      a.style.cssText='display:inline-block;margin-top:10px;padding:10px 18px;background:#fff;color:#c40000;border-radius:8px;text-decoration:none;font-size:17px';
+      b.appendChild(a);
       document.body.appendChild(b);
-      st.banner=b;
+      st.banner=b; st.txt=t; st.link=a;
+      isNew=true;
       try{ if(navigator.vibrate) navigator.vibrate([400,200,400,200,400]); }catch(e){}
     }
-    st.banner.textContent='⚠️ تنبيه : شخص على السكة — على بعد '+fmt(nearest.dist_m)+(list.length>1?' ('+list.length+' أشخاص)':'');
+    st.txt.textContent='⚠️ تنبيه : شخص على السكة — على بعد '+fmt(nearest.dist_m)+(list.length>1?' ('+list.length+' أشخاص)':'');
+    st.link.href=url;
+    if(isNew){ try{ window.open(url,'_blank'); }catch(e){} }
   }
   function hideBanner(){
-    if(st.banner){ try{ st.banner.remove(); }catch(e){} st.banner=null; }
+    if(st.banner){ try{ st.banner.remove(); }catch(e){} st.banner=null; st.txt=null; st.link=null; }
   }
   function poll(){
     if(st.lat===null) return;
