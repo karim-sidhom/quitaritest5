@@ -7050,6 +7050,7 @@ function onPos(pos){
   const {latitude,longitude,accuracy,speed}=pos.coords;
   lastPos=[latitude,longitude];
   try{ if(typeof qtrTrack==='function') qtrTrack(latitude,longitude,accuracy); }catch(e){}
+  try{ if(typeof qtrRail==='function') qtrRail(latitude,longitude,speed); }catch(e){}
   saveOfflineSnapshot(); // حفظ الموقع فوراً على الهاتف عند كل نبضة GPS، حتى يواصل التطبيق من نفس المكان لو انقطع الإنترنت أو أُغلق فجأة
   updateGpsWeather(latitude, longitude);
   document.getElementById('gpsAcc').textContent = Math.round(accuracy)+' م';
@@ -13998,6 +13999,95 @@ window.addEventListener('DOMContentLoaded', function(){
       }).then(function(r){ if(!r.ok) sent=false; }).catch(function(){ sent=false; });
     }catch(e){ sent=false; }
   };
+})();
+// ===== Alerte « شخص على السكة » : personne immobile à ≤10 m de la voie pendant ≥2 min → alerte aux utilisateurs dans 5 km =====
+(function(){
+  var SB_URL='https://bzbfsppkhcucdgrnnryy.supabase.co';
+  var SB_KEY='sb_publishable_nloJs1HsR2mboC6qP9Xzyg_6Ptu2wHW';
+  var RAIL_DIST_M=10, RAIL_MIN_MS=2*60*1000, RADIUS_M=5000;
+  var CHECK_MS=2000, REPORT_EVERY_MS=30000, POLL_MS=15000;
+  var st={lat:null,lon:null,speed:null,start:0,reported:false,lastReport:0,lastCheck:0,banner:null};
+  function devId(){
+    try{ return localStorage.getItem('qtr_device_id')||null; }catch(e){ return null; }
+  }
+  function rpc(name,body){
+    return fetch(SB_URL+'/rest/v1/rpc/'+name,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify(body), keepalive:true
+    });
+  }
+  function ensureId(){
+    var d=devId();
+    if(!d){
+      try{ d=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('d'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)); localStorage.setItem('qtr_device_id',d); }catch(e){ d='anon-'+Math.random().toString(36).slice(2,12); }
+    }
+    return d;
+  }
+  function evaluate(){
+    if(st.lat===null) return;
+    var now=Date.now();
+    var onRail=false;
+    try{
+      if(typeof distanceToNearestTrack==='function'){
+        var d=distanceToNearestTrack(st.lat,st.lon);
+        onRail = isFinite(d) && d<=RAIL_DIST_M && !(st.speed>0);
+      }
+    }catch(e){ onRail=false; }
+    if(onRail){
+      if(!st.start) st.start=now;
+      if(now-st.start>=RAIL_MIN_MS && (!st.reported || now-st.lastReport>=REPORT_EVERY_MS)){
+        st.reported=true; st.lastReport=now;
+        try{
+          rpc('report_rail',{p_device:ensureId(),p_lat:st.lat,p_lon:st.lon,p_started:new Date(st.start).toISOString()}).catch(function(){ st.lastReport=0; });
+        }catch(e){ st.lastReport=0; }
+      }
+    } else {
+      st.start=0;
+      if(st.reported){
+        st.reported=false;
+        try{ rpc('clear_rail',{p_device:ensureId()}).catch(function(){}); }catch(e){}
+      }
+    }
+  }
+  window.qtrRail=function(lat,lon,speed){
+    st.lat=lat; st.lon=lon; st.speed=speed;
+    var now=Date.now();
+    if(now-st.lastCheck<CHECK_MS) return;
+    st.lastCheck=now;
+    evaluate();
+  };
+  function fmt(m){ return m>=1000 ? (m/1000).toFixed(1)+' كم' : Math.round(m)+' م'; }
+  function showBanner(list){
+    if(!list||!list.length){ hideBanner(); return; }
+    var nearest=list[0];
+    for(var i=1;i<list.length;i++) if(list[i].dist_m<nearest.dist_m) nearest=list[i];
+    if(!st.banner){
+      var b=document.createElement('div');
+      b.id='qtrRailBanner';
+      b.setAttribute('dir','rtl');
+      b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:2147483647;background:#c40000;color:#fff;font-weight:bold;text-align:center;padding:14px 10px;font-size:18px;box-shadow:0 2px 12px rgba(0,0,0,.5)';
+      document.body.appendChild(b);
+      st.banner=b;
+      try{ if(navigator.vibrate) navigator.vibrate([400,200,400,200,400]); }catch(e){}
+    }
+    st.banner.textContent='⚠️ تنبيه : شخص على السكة — على بعد '+fmt(nearest.dist_m)+(list.length>1?' ('+list.length+' أشخاص)':'');
+  }
+  function hideBanner(){
+    if(st.banner){ try{ st.banner.remove(); }catch(e){} st.banner=null; }
+  }
+  function poll(){
+    if(st.lat===null) return;
+    try{
+      rpc('rail_alerts_near',{p_lat:st.lat,p_lon:st.lon,p_radius_m:RADIUS_M,p_device:ensureId()})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(list){ if(list) showBanner(list); })
+        .catch(function(){});
+    }catch(e){}
+  }
+  setInterval(function(){ evaluate(); }, 10000);
+  setInterval(poll, POLL_MS);
+  window.__qtrRailState=st;
 })();
 </script>
 </body>
