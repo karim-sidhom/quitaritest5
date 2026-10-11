@@ -14007,7 +14007,7 @@ window.addEventListener('DOMContentLoaded', function(){
   var SB_KEY='sb_publishable_nloJs1HsR2mboC6qP9Xzyg_6Ptu2wHW';
   var RAIL_DIST_M=1000, RAIL_MIN_MS=2*60*1000, RADIUS_M=5000;
   var CHECK_MS=2000, REPORT_EVERY_MS=30000, POLL_MS=15000;
-  var st={lat:null,lon:null,speed:null,start:0,reported:false,lastReport:0,lastCheck:0,banner:null};
+  var st={lat:null,lon:null,speed:null,start:0,m:[],reported:false,lastReport:0,lastCheck:0,banner:null};
   function devId(){
     try{ return localStorage.getItem('qtr_device_id')||null; }catch(e){ return null; }
   }
@@ -14032,19 +14032,25 @@ window.addEventListener('DOMContentLoaded', function(){
     try{
       if(typeof distanceToNearestTrack==='function'){
         var d=distanceToNearestTrack(st.lat,st.lon);
-        onRail = isFinite(d) && d<=RAIL_DIST_M && !(st.speed>0);
+        onRail = isFinite(d) && d<=RAIL_DIST_M;
+        if(onRail){
+          // 3 mesures de la distance à la voie (début, 1 min, 2 min) : fixe ou en baisse = on continue ; en hausse = on recommence
+          if(!st.start){ st.start=now; st.m=[d]; }
+          else if(st.m.length===1 && now-st.start>=RAIL_MIN_MS/2){ if(d>st.m[0]){ st.start=now; st.m=[d]; } else st.m.push(d); }
+          else if(st.m.length===2 && now-st.start>=RAIL_MIN_MS){ if(d>st.m[1]){ st.start=now; st.m=[d]; } else st.m.push(d); }
+        }
       }
     }catch(e){ onRail=false; }
     if(onRail){
       if(!st.start) st.start=now;
-      if(now-st.start>=RAIL_MIN_MS && (!st.reported || now-st.lastReport>=REPORT_EVERY_MS)){
+      if(st.m.length>=3 && now-st.start>=RAIL_MIN_MS && (!st.reported || now-st.lastReport>=REPORT_EVERY_MS)){
         st.reported=true; st.lastReport=now;
         try{
           rpc('report_rail',{p_device:ensureId(),p_lat:st.lat,p_lon:st.lon,p_started:new Date(st.start).toISOString()}).catch(function(){ st.lastReport=0; });
         }catch(e){ st.lastReport=0; }
       }
     } else {
-      st.start=0;
+      st.start=0; st.m=[];
       if(st.reported){
         st.reported=false;
         try{ rpc('clear_rail',{p_device:ensureId()}).catch(function(){}); }catch(e){}
