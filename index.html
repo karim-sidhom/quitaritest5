@@ -14000,11 +14000,11 @@ window.addEventListener('DOMContentLoaded', function(){
     }catch(e){ sent=false; }
   };
 })();
-// ===== Alerte « شخص على السكة » : personne immobile à ≤10 m de la voie pendant ≥2 min → alerte aux utilisateurs dans 5 km =====
+// ===== Alerte « شخص على السكة » : personne immobile à ≤1000 m de la voie (test) pendant ≥2 min → alerte aux utilisateurs dans 5 km =====
 (function(){
   var SB_URL='https://bzbfsppkhcucdgrnnryy.supabase.co';
   var SB_KEY='sb_publishable_nloJs1HsR2mboC6qP9Xzyg_6Ptu2wHW';
-  var RAIL_DIST_M=10, RAIL_MIN_MS=2*60*1000, RADIUS_M=5000;
+  var RAIL_DIST_M=1000, RAIL_MIN_MS=2*60*1000, RADIUS_M=5000;
   var CHECK_MS=2000, REPORT_EVERY_MS=30000, POLL_MS=15000;
   var st={lat:null,lon:null,speed:null,start:0,reported:false,lastReport:0,lastCheck:0,banner:null};
   function devId(){
