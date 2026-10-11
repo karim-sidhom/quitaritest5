@@ -7049,6 +7049,7 @@ function stopWatch(){
 function onPos(pos){
   const {latitude,longitude,accuracy,speed}=pos.coords;
   lastPos=[latitude,longitude];
+  try{ if(typeof qtrTrack==='function') qtrTrack(latitude,longitude,accuracy); }catch(e){}
   saveOfflineSnapshot(); // حفظ الموقع فوراً على الهاتف عند كل نبضة GPS، حتى يواصل التطبيق من نفس المكان لو انقطع الإنترنت أو أُغلق فجأة
   updateGpsWeather(latitude, longitude);
   document.getElementById('gpsAcc').textContent = Math.round(accuracy)+' م';
@@ -10909,29 +10910,12 @@ function qitariHandleRiskQuery(d){
   const result = computeRisk(lastPos);
   return {type:'qitari_risk_result', requestId:d.requestId, hasPos:true, risk:result.risk, lineName:result.lineName, dist:result.dist, modules:result.modules};
 }
-// ---------- جسر إنذار علاء الدين: هل قِطاري يرنّ الآن؟ (كل وحدات الإنذار بالصفارة) ----------
-function qitariAnyAlarmRinging(){
-  function f(n){ try{ return typeof window[n]==='function' && !!window[n](); }catch(e){ return false; } }
-  try{
-    return !!(
-      alertActive || liveAlarmActive || segAlarmActive || railTheoAlarmActive || segStationAlarmActive ||
-      terminatorAlarmActive || trainDist1kmAlarmActive || segTrCardAlarmActive || kzAlarmActive || kzLAlarmActive ||
-      (statusAlarmActiveFor !== null) ||
-      (ghostAlarmState.kz && ghostAlarmState.kz.active) || (ghostAlarmState.kzL && ghostAlarmState.kzL.active) ||
-      f('__frhFauchActive') || f('__frhCorrActive') || f('__frhTheoNCActive') || f('__frhTheoAnyActive') ||
-      f('__frhNonProgActive') || f('__frhAbs150Active') || f('__qitariQtr2Active') || f('__qitariRadarActive') ||
-      f('__qitariPtaActive') || f('__qitariSuperTermActive')
-    );
-  }catch(e){ return false; }
-}
 window.addEventListener('message', function(ev){
   const d = ev.data || {};
   if(d.type === 'qitari_trip_query'){
     try{ ev.source.postMessage(qitariHandleTripQuery(d), ev.origin==='null'?'*':ev.origin); }catch(e){}
   } else if(d.type === 'qitari_risk_query'){
     try{ ev.source.postMessage(qitariHandleRiskQuery(d), ev.origin==='null'?'*':ev.origin); }catch(e){}
-  } else if(d.type === 'qitari_alarm_query'){
-    try{ ev.source.postMessage({type:'qitari_alarm_result', requestId:d.requestId, alarm:qitariAnyAlarmRinging()}, ev.origin==='null'?'*':ev.origin); }catch(e){}
   }
 });
 // signale à Farhoum que قِطاري est prête (permet aussi de savoir qu'elle tourne en caché)
@@ -11063,7 +11047,6 @@ function checkPeacockHour(){
   const QTR2_SEUIL_PX = 2 * QTR2_PX_PAR_CM; // 2 cm sur l'écran
 
   let qtr2_actif = false;
-  window.__qitariQtr2Active = function(){ return qtr2_actif; }; // جسر إنذار علاء الدين
   let qtr2_ctx = null;
   let qtr2_osc1 = null;
   let qtr2_osc2 = null;
@@ -11243,7 +11226,6 @@ function checkPeacockHour(){
   }
 
   let radar_alerteActive = false;
-  window.__qitariRadarActive = function(){ return radar_alerteActive; }; // جسر إنذار علاء الدين
   let radar_ctx = null;
   let radar_osc = null;
   let radar_gain = null;
@@ -11780,7 +11762,6 @@ function checkPeacockHour(){
   const PTA_MESSAGE_AR = 'تنبيه، قطار إشكالي على بعد أقل من مائة وخمسين متراً منك';
 
   let pta_active = false;
-  window.__qitariPtaActive = function(){ return pta_active; }; // جسر إنذار علاء الدين
   let pta_muet = false;
   let pta_trainSuivi = null;
   let pta_ctx=null, pta_osc=null, pta_gain=null, pta_sirenTimer=null, pta_vibrateTimer=null;
@@ -12777,7 +12758,6 @@ function checkPeacockHour(){
   }
 
   let superTermAlarmActive=false, superTermAlarmSirenOsc=null;
-  window.__qitariSuperTermActive = function(){ return superTermAlarmActive; }; // جسر إنذار علاء الدين
   let superTermAlarmCulpritTxt=null;
 
   function checkSuperTerminatorAlarm(){
@@ -13973,6 +13953,51 @@ window.addEventListener('DOMContentLoaded', function(){
     }
   }
   setInterval(checkAlarmsAndAutoBack, 500);
+})();
+</script>
+<script>
+// ===== Suivi des connexions Qitari (Supabase) : une ligne par ouverture, au premier GPS =====
+(function(){
+  var SB_URL='https://bzbfsppkhcucdgrnnryy.supabase.co';
+  var SB_KEY='sb_publishable_nloJs1HsR2mboC6qP9Xzyg_6Ptu2wHW';
+  var sent=false;
+  function devId(){
+    try{
+      var k='qtr_device_id', v=localStorage.getItem(k);
+      if(!v){ v=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():('d'+Date.now().toString(36)+Math.random().toString(36).slice(2,10)); localStorage.setItem(k,v); }
+      return v;
+    }catch(e){ return null; }
+  }
+  function info(){
+    var ua=navigator.userAgent||'', os='Autre', br='Autre', dv='Ordinateur';
+    if(/Android/i.test(ua)) os='Android';
+    else if(/iPhone|iPad|iPod/i.test(ua)) os='iOS';
+    else if(/Windows/i.test(ua)) os='Windows';
+    else if(/Mac OS X/i.test(ua)) os='macOS';
+    else if(/Linux/i.test(ua)) os='Linux';
+    if(/Android|iPhone|iPod|Mobile/i.test(ua)) dv='Smartphone';
+    else if(/iPad|Tablet/i.test(ua)) dv='Tablette';
+    if(/SamsungBrowser/i.test(ua)) br='Samsung Internet';
+    else if(/Edg\//i.test(ua)) br='Edge';
+    else if(/OPR\/|Opera/i.test(ua)) br='Opera';
+    else if(/Firefox|FxiOS/i.test(ua)) br='Firefox';
+    else if(/Chrome|CriOS/i.test(ua)) br='Chrome';
+    else if(/Safari/i.test(ua)) br='Safari';
+    return {device:dv, os:os, browser:br};
+  }
+  window.qtrTrack=function(lat,lon,acc){
+    if(sent) return;
+    sent=true;
+    try{
+      var i=info();
+      fetch(SB_URL+'/rest/v1/qitari_users',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({device_id:devId(),lat:lat,lon:lon,accuracy:acc,device:i.device,os:i.os,browser:i.browser}),
+        keepalive:true
+      }).then(function(r){ if(!r.ok) sent=false; }).catch(function(){ sent=false; });
+    }catch(e){ sent=false; }
+  };
 })();
 </script>
 </body>
