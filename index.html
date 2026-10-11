@@ -8184,6 +8184,7 @@ function distanceToNearestTrack(lat,lon){
   });
   return best;
 }
+window.distanceToNearestTrack = distanceToNearestTrack;
 // ---------- أولوية جديدة (بطلب صريح من المستخدم): استعمال محطتَي SNCFT Live نفسهما (curFr/nextFr) مباشرة ----------
 // المبدأ: SNCFT Live يعطي أصلاً لكل قطار EN_ROUTE اسم "آخر محطة" و"المحطة التالية" جاهزتين — لا داعي لانتظار
 // Nominatim لتحديد أقرب محطتين لموقع المستخدم بالتخمين الهندسي البحت. نأخذ إحداثيات هاتين المحطتين (من STATIONS
