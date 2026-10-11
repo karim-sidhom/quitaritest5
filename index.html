@@ -14064,6 +14064,37 @@ window.addEventListener('DOMContentLoaded', function(){
     st.lastCheck=now;
     evaluate();
   };
+  // ---- صفّارة الإنذار : نفس صوت صفّارة التطبيق (sawtooth 880↔440 Hz) ، تعمل ما دام الشريط الأحمر ظاهراً ----
+  var ac=null, sirenOsc=null;
+  var speechPrimed=false, speakTimer=null;
+  function unlockAc(){
+    try{ if(!ac) ac=new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); }catch(e){}
+    try{ if(!speechPrimed && 'speechSynthesis' in window){ speechPrimed=true; var u0=new SpeechSynthesisUtterance(' '); u0.volume=0.01; u0.rate=10; window.speechSynthesis.speak(u0); } }catch(e){}
+  }
+  // الصوت المنطوق : « ساعدوني ساعدوني » بالعربية، يتكرّر ما دام الشريط ظاهراً
+  function speakHelp(){
+    try{
+      if(!('speechSynthesis' in window)) return;
+      var ss=window.speechSynthesis;
+      if(ss.speaking||ss.pending) return;
+      var u=new SpeechSynthesisUtterance('ساعدوني ساعدوني');
+      u.lang='ar-SA'; u.volume=1; u.rate=0.9;
+      var vs=ss.getVoices(); for(var i=0;i<vs.length;i++){ if(vs[i].lang&&vs[i].lang.toLowerCase().indexOf('ar')===0){ u.voice=vs[i]; break; } }
+      ss.speak(u);
+    }catch(e){}
+  }
+  ['pointerdown','touchstart','click','keydown'].forEach(function(ev){ document.addEventListener(ev,unlockAc,{capture:true,passive:true}); });
+  function startRailSiren(){
+    try{
+      unlockAc(); if(!ac||sirenOsc) return;
+      var o=ac.createOscillator(), g=ac.createGain();
+      o.type='sawtooth'; g.gain.value=0.5; o.connect(g).connect(ac.destination); o.start();
+      o._sweep=setInterval(function(){ if(ac.state==='suspended') ac.resume(); var t=ac.currentTime; o.frequency.setValueAtTime(880,t); o.frequency.linearRampToValueAtTime(440,t+0.4); o.frequency.linearRampToValueAtTime(880,t+0.8); },800);
+      sirenOsc=o;
+    }catch(e){}
+    if(!speakTimer){ speakHelp(); speakTimer=setInterval(speakHelp,3000); }
+  }
+  function stopRailSiren(){ try{ if(speakTimer){ clearInterval(speakTimer); speakTimer=null; } if('speechSynthesis' in window) window.speechSynthesis.cancel(); }catch(e){} try{ if(sirenOsc){ clearInterval(sirenOsc._sweep); sirenOsc.stop(); sirenOsc.disconnect(); sirenOsc=null; } }catch(e){} }
   function fmt(m){ return m>=1000 ? (m/1000).toFixed(1)+' كم' : Math.round(m)+' م'; }
   function mapsUrl(p){ return 'https://www.google.com/maps/search/?api=1&query='+p.lat+','+p.lon; }
   function showBanner(list){
@@ -14090,9 +14121,11 @@ window.addEventListener('DOMContentLoaded', function(){
     }
     st.txt.textContent='⚠️ تنبيه : شخص على السكة — على بعد '+fmt(nearest.dist_m)+(list.length>1?' ('+list.length+' أشخاص)':'');
     st.link.href=url;
+    startRailSiren();
     if(isNew){ try{ window.open(url,'_blank'); }catch(e){} }
   }
   function hideBanner(){
+    stopRailSiren();
     if(st.banner){ try{ st.banner.remove(); }catch(e){} st.banner=null; st.txt=null; st.link=null; }
   }
   function poll(){
